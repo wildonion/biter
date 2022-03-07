@@ -7,16 +7,60 @@
 
 
 
+
 use futures::Future;
-use mongodb::sync::Client;
+use mongodb::sync::Client; //-- we're using sync mongodb cause mongodb requires tokio to be in Cargo.toml and there is a confliction with the actix tokio
 use uuid::Uuid;
 use serde::{Serialize, Deserialize};
+use actix_web::{Error, HttpRequest, HttpResponse, Result};
 
 
 
 
 
 
+
+
+#[derive(Debug)]
+pub struct Api{
+    pub name: String,
+    pub req: Option<HttpRequest>,
+    pub res: Option<HttpResponse>,
+}
+
+
+impl Api{
+
+    pub async fn new(request: Option<HttpRequest>, response: Option<HttpResponse>) -> Self{
+        Api{
+            name: String::from(""),
+            req: request,
+            res: response,
+        }
+    }
+    
+    pub async fn post<F, C>(mut self, endpoint: &str, mut cb: F) -> Result<HttpResponse, Error> //-- defining self (an instance of the object) as mutable cause we want to assign the name of the api
+                        where F: FnMut(HttpRequest, HttpResponse) -> C, //-- capturing by &mut T
+                        C: Future<Output=Result<HttpResponse, Error>> + Send, //-- C is a future object which will be returned by the closure and has bounded to Send to move across threads
+    {
+        self.name = endpoint.to_string(); //-- setting the api name to the current endpoint
+        let req = self.req.unwrap();
+        let res = self.res.unwrap();
+        let cb_res = cb(req, res).await.unwrap(); //-- this would be of type either hyper::Response<Body> or hyper::Error
+        Ok(cb_res)
+    }
+    
+    pub async fn get<F, C>(mut self, endpoint: &str, mut cb: F) -> Result<HttpResponse, Error> //-- defining self (an instance of the object) as mutable cause we want to assign the name of the api
+                        where F: FnMut(HttpRequest, HttpResponse) -> C, //-- capturing by &mut T
+                        C: Future<Output=Result<HttpResponse, Error>> + Send, //-- C is a future object which will be returned by the closure and has bounded to Send to move across threads
+    {
+        self.name = endpoint.to_string(); //-- setting the api name to the current endpoint
+        let req = self.req.unwrap();
+        let res = self.res.unwrap();
+        let cb_res = cb(req, res).await.unwrap(); //-- this would be of type either hyper::Response<Body> or hyper::Error
+        Ok(cb_res)
+    }
+}
 
 
 

@@ -1,7 +1,7 @@
 {
 	"info": {
 		"_postman_id": "4f0bbd4a-0003-4a91-9eb8-6a0fab9a1398",
-		"name": "Fishuman",
+		"name": "Bitrader",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -21,7 +21,7 @@
 				],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"title\" : \"Fishuman Price Secon Priod\",\r\n    \"content\": \"eikfjisvfjvjsdfkv\",\r\n    \"creator_wallet_address\": \"0xa7792E64b6F4787ee4Dc4b2Acsd7d8EC708cd186\"\r\n}",
+					"raw": "{\r\n    \"title\" : \"Bitrader Price Secon Priod\",\r\n    \"content\": \"this is a news about the new bitdad fishumans' prices\",\r\n    \"creator_wallet_address\": \"0xa7792E64b6F4787ee4Dc4b2Acsd7d8EC708cd186\"\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -29,9 +29,9 @@
 					}
 				},
 				"url": {
-					"raw": "{{fishuman}}/proposal/add",
+					"raw": "{{bitrader}}/proposal/add",
 					"host": [
-						"{{fishuman}}"
+						"{{bitrader}}"
 					],
 					"path": [
 						"proposal",
@@ -47,9 +47,9 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "{{fishuman}}/proposal/get/availables",
+					"raw": "{{bitrader}}/proposal/get/availables",
 					"host": [
-						"{{fishuman}}"
+						"{{bitrader}}"
 					],
 					"path": [
 						"proposal",
@@ -67,7 +67,7 @@
 				"header": [],
 				"body": {
 					"mode": "raw",
-					"raw": "{\r\n    \"_id\": \"6216a7c8367bfaa231a9bdb2\",\r\n    \"voter\": {\r\n        \"fishuman_owner_wallet_address\": \"0x364Ab8AFEe441016a10b0178C6E2511d8d47b3D8\",\r\n        \"is_upvote\": false,\r\n        \"score\": 7\r\n    }\r\n}",
+					"raw": "{\r\n    \"_id\": \"6216a7c8367bfaa231a9bdb2\",\r\n    \"voter\": {\r\n        \"bitrader_owner_wallet_address\": \"0x364Ab8AFEe441016a10b0178C6E2511d8d47b3D8\",\r\n        \"is_upvote\": false,\r\n        \"score\": 7\r\n    }\r\n}",
 					"options": {
 						"raw": {
 							"language": "json"
@@ -75,9 +75,9 @@
 					}
 				},
 				"url": {
-					"raw": "{{fishuman}}/proposal/cast-vote",
+					"raw": "{{bitrader}}/proposal/cast-vote",
 					"host": [
-						"{{fishuman}}"
+						"{{bitrader}}"
 					],
 					"path": [
 						"proposal",
@@ -102,9 +102,9 @@
 					}
 				},
 				"url": {
-					"raw": "{{fishuman}}/proposal/set-expire",
+					"raw": "{{bitrader}}/proposal/set-expire",
 					"host": [
-						"{{fishuman}}"
+						"{{bitrader}}"
 					],
 					"path": [
 						"proposal",
@@ -137,8 +137,8 @@
 	],
 	"variable": [
 		{
-			"key": "fishuman",
-			"value": "https://api.fishuman.com:7436",
+			"key": "bitrader",
+			"value": "https://api.bitrader.com:7436",
 			"type": "string"
 		}
 	]

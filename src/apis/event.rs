@@ -2,9 +2,7 @@
 
 
 
-
 use std::env;
-use std::sync::Arc;
 use crate::contexts as ctx;
 use crate::schemas;
 use crate::constants::*;
@@ -12,7 +10,7 @@ use crate::utils;
 use chrono::Utc;
 use futures::{executor::block_on, TryFutureExt, TryStreamExt}; //-- based on orphan rule TryStreamExt trait is required to use try_next() method on the future object which is solved by .await - try_next() is used on futures stream or chunks to get the next future IO stream
 use bytes::Buf; //-- based on orphan rule it'll be needed to call the reader() method on the whole_body buffer
-use mongodb::{sync::Client, bson, bson::{doc, oid::ObjectId}}; //-- we're using sync mongodb cause mongodb requires tokio to be in Cargo.toml and there is a confliction with the actix tokio
+use mongodb::{bson, bson::{doc, oid::ObjectId}};
 use actix_web::{Error, HttpRequest, HttpResponse, Result, get, post, web};
 
 
@@ -26,7 +24,7 @@ use actix_web::{Error, HttpRequest, HttpResponse, Result, get, post, web};
 
 
 #[post("/add")]
-async fn add_proposal(req: HttpRequest, proposal_info: web::Json<schemas::fishuman::ProposalAddRequest>) -> Result<HttpResponse, Error>{
+async fn add_event(req: HttpRequest, event_info: web::Json<schemas::event::EventAddRequest>) -> Result<HttpResponse, Error>{
     
     let conn = utils::db::connection().await;
     let app_storage = match conn.as_ref().unwrap().db.as_ref().unwrap().mode{ //-- here as_ref() method convert &Option<T> to Option<&T>
@@ -34,13 +32,13 @@ async fn add_proposal(req: HttpRequest, proposal_info: web::Json<schemas::fishum
         ctx::app::Mode::Off => None, //-- no db is available cause it's off
     };
 
-    let proposal_info = proposal_info.into_inner(); //-- into_inner() will deconstruct to an inner value and return T    
-    let proposals = app_storage.unwrap().database("fishuman").collection::<schemas::fishuman::ProposalInfo>("proposals"); //-- selecting proposals collection to fetch all proposal infos into the ProposalInfo struct
-    match proposals.find_one(doc!{"title": proposal_info.clone().title}, None).unwrap(){ //-- finding proposal based on proposal title
-        Some(proposal_doc) => { //-- deserializing BSON into the ProposalInfo struct
-            let response_body = ctx::app::Response::<schemas::fishuman::ProposalInfo>{ //-- we have to specify a generic type for data field in Response struct which in our case is ProposalInfo struct
-                data: Some(proposal_doc), //-- data is an empty &[u8] array
-                message: FOUND_DOCUMENT, //-- collection found in fishuman document (database)
+    let event_info = event_info.into_inner(); //-- into_inner() will deconstruct to an inner value and return T    
+    let events = app_storage.unwrap().database("bitrader").collection::<schemas::event::EventInfo>("events"); //-- selecting events collection to fetch all event infos into the EventInfo struct
+    match events.find_one(doc!{"title": event_info.clone().title}, None).unwrap(){ //-- finding event based on event title
+        Some(event_doc) => { //-- deserializing BSON into the EventInfo struct
+            let response_body = ctx::app::Response::<schemas::event::EventInfo>{ //-- we have to specify a generic type for data field in Response struct which in our case is EventInfo struct
+                data: Some(event_doc), //-- data is an empty &[u8] array
+                message: FOUND_DOCUMENT, //-- collection found in bitrader database
                 status: 302,
             };
             Ok(
@@ -51,21 +49,21 @@ async fn add_proposal(req: HttpRequest, proposal_info: web::Json<schemas::fishum
             )
         }, 
         None => { //-- means we didn't find any document related to this title and we have to create a new proposaL
-            let proposals = app_storage.unwrap().database("fishuman").collection::<schemas::fishuman::ProposalAddRequest>("proposals");
+            let events = app_storage.unwrap().database("bitrader").collection::<schemas::event::EventAddRequest>("events");
             let now = Utc::now().timestamp_nanos() / 1_000_000_000; // nano to sec
-            let exp_time = now + env::var("PROPOSAL_EXPIRATION").expect("⚠️ found no proposal expiration time").parse::<i64>().unwrap();
-            let new_proposal = schemas::fishuman::ProposalAddRequest{
-                title: proposal_info.clone().title,
-                content: proposal_info.clone().content,
-                creator_wallet_address: proposal_info.clone().creator_wallet_address,
+            let exp_time = now + env::var("PROPOSAL_EXPIRATION").expect("⚠️ found no event expiration time").parse::<i64>().unwrap();
+            let new_event = schemas::event::EventAddRequest{
+                title: event_info.clone().title,
+                content: event_info.clone().content,
+                creator_wallet_address: event_info.clone().creator_wallet_address,
                 upvotes: Some(0),
                 downvotes: Some(0),
                 voters: Some(vec![]), //-- initializing empty voters
-                is_expired: Some(false), //-- a proposal is not expired yet or at initialization
-                expire_at: Some(exp_time), //-- a proposal will be expired at
+                is_expired: Some(false), //-- a event is not expired yet or at initialization
+                expire_at: Some(exp_time), //-- a event will be expired at
                 created_at: Some(now),
             };
-            match proposals.insert_one(new_proposal, None){
+            match events.insert_one(new_event, None){
                 Ok(insert_result) => {
                     let response_body = ctx::app::Response::<ObjectId>{ //-- we have to specify a generic type for data field in Response struct which in our case is ObjectId struct
                         data: Some(insert_result.inserted_id.as_object_id().unwrap()),
@@ -98,7 +96,7 @@ async fn add_proposal(req: HttpRequest, proposal_info: web::Json<schemas::fishum
 
 
 #[get("/get/availables")]
-async fn get_all_proposals(req: HttpRequest) -> Result<HttpResponse, Error>{
+async fn get_all_events(req: HttpRequest) -> Result<HttpResponse, Error>{
 
     let conn = utils::db::connection().await;
     let app_storage = match conn.as_ref().unwrap().db.as_ref().unwrap().mode{ //-- here as_ref() method convert &Option<T> to Option<&T>
@@ -106,24 +104,28 @@ async fn get_all_proposals(req: HttpRequest) -> Result<HttpResponse, Error>{
         ctx::app::Mode::Off => None, //-- no db is available cause it's off
     };
 
-    let filter = doc! { "is_expired": false }; //-- filtering all none expired proposals
-    let proposals = app_storage.unwrap().database("fishuman").collection::<schemas::fishuman::ProposalInfo>("proposals"); //-- selecting proposals collection to fetch and deserialize all proposal infos or documents from BSON into the ProposalInfo struct
-    let mut available_proposals = schemas::fishuman::AvailableProposals{
-        proposals: vec![],
+    let filter = doc! { "is_expired": false }; //-- filtering all none expired events
+    let events = app_storage.unwrap().database("bitrader").collection::<schemas::event::EventInfo>("events"); //-- selecting events collection to fetch and deserialize all event infos or documents from BSON into the EventInfo struct
+    let mut available_events = schemas::event::AvailableEvents{
+        events: vec![],
     };
 
-    match proposals.find(filter, None){
+    match events.find(filter, None){
         Ok(cursor) => {
+
+            // ---------------------------------------
             // NOTE - uncomment this for async mongodb
-            // while let Some(proposal) = cursor.try_next().await.unwrap(){ //-- calling try_next() method on cursor needs the cursor to be mutable - reading while awaiting on try_next() method doesn't return None
-            //     available_proposals.proposals.push(proposal);
+            // ---------------------------------------
+            // while let Some(event) = cursor.try_next().await.unwrap(){ //-- calling try_next() method on cursor needs the cursor to be mutable - reading while awaiting on try_next() method doesn't return None
+            //     available_events.events.push(event);
             // }
-            for proposal in cursor {
-                available_proposals.proposals.push(proposal.unwrap());
+            
+            for event in cursor {
+                available_events.events.push(event.unwrap());
             }
-            let response_body = ctx::app::Response::<schemas::fishuman::AvailableProposals>{
+            let response_body = ctx::app::Response::<schemas::event::AvailableEvents>{
                 message: FETCHED,
-                data: Some(available_proposals), //-- data is an empty &[u8] array
+                data: Some(available_events), //-- data is an empty &[u8] array
                 status: 200,
             };
             Ok(
@@ -150,7 +152,7 @@ async fn get_all_proposals(req: HttpRequest) -> Result<HttpResponse, Error>{
 
 
 #[post("/cast-vote")]
-async fn cast_vote_proposal(req: HttpRequest, vote_info: web::Json<schemas::fishuman::CastVoteRequest>) -> Result<HttpResponse, Error>{
+async fn cast_vote_event(req: HttpRequest, vote_info: web::Json<schemas::event::CastVoteRequest>) -> Result<HttpResponse, Error>{
     
     let conn = utils::db::connection().await;
     let app_storage = match conn.as_ref().unwrap().db.as_ref().unwrap().mode{ //-- here as_ref() method convert &Option<T> to Option<&T>
@@ -159,27 +161,27 @@ async fn cast_vote_proposal(req: HttpRequest, vote_info: web::Json<schemas::fish
     };
 
     let vote_info = vote_info.into_inner(); //-- into_inner() will deconstruct to an inner value and return T
-    let proposal_id = ObjectId::parse_str(vote_info._id.as_str()).unwrap(); //-- generating mongodb object id from the id string 
-    let proposals = app_storage.unwrap().database("fishuman").collection::<schemas::fishuman::ProposalInfo>("proposals"); //-- selecting proposals collection to fetch all proposal infos into the ProposalInfo struct
-    match proposals.find_one(doc!{"_id": proposal_id}, None).unwrap(){ //-- finding proposal based on proposal title and id
-        Some(proposal_doc) => { //-- deserializing BSON into the ProposalInfo struct
-            let mut upvotes = proposal_doc.upvotes.unwrap(); //-- trait Copy is implemented for u16 thus we don't loose the ownership when we move them into a new scope
-            let mut downvotes = proposal_doc.downvotes.unwrap(); //-- trait Copy is implemented for u16 thus we don't loose the ownership when we move them into a new scope
+    let event_id = ObjectId::parse_str(vote_info._id.as_str()).unwrap(); //-- generating mongodb object id from the id string 
+    let events = app_storage.unwrap().database("bitrader").collection::<schemas::event::EventInfo>("events"); //-- selecting events collection to fetch all event infos into the EventInfo struct
+    match events.find_one(doc!{"_id": event_id}, None).unwrap(){ //-- finding event based on event title and id
+        Some(event_doc) => { //-- deserializing BSON into the EventInfo struct
+            let mut upvotes = event_doc.upvotes.unwrap(); //-- trait Copy is implemented for u16 thus we don't loose the ownership when we move them into a new scope
+            let mut downvotes = event_doc.downvotes.unwrap(); //-- trait Copy is implemented for u16 thus we don't loose the ownership when we move them into a new scope
             if vote_info.voter.is_upvote{
                 upvotes+=1;
             }
             if !vote_info.voter.is_upvote{
                 downvotes+=1;
             }
-            let updated_voters = proposal_doc.clone().add_voter(vote_info.clone().voter).await;
+            let updated_voters = event_doc.clone().add_voter(vote_info.clone().voter).await;
             let serialized_voters = bson::to_bson(&updated_voters).unwrap(); //-- we have to serialize the updated_voters to BSON Document object in order to update voters field inside the collection
             let serialized_upvotes = bson::to_bson(&upvotes).unwrap(); //-- we have to serialize the upvotes to BSON Document object in order to update voters field inside the collection
             let serialized_downvotes = bson::to_bson(&downvotes).unwrap(); //-- we have to serialize the downvotes to BSON Document object in order to update voters field inside the collection
-            match proposals.update_one(doc!{"_id": proposal_id}, doc!{"$set": { "voters": serialized_voters, "upvotes": serialized_upvotes, "downvotes": serialized_downvotes }}, None){
+            match events.update_one(doc!{"_id": event_id}, doc!{"$set": { "voters": serialized_voters, "upvotes": serialized_upvotes, "downvotes": serialized_downvotes }}, None){
                 Ok(updated_result) => {
                     let response_body = ctx::app::Response::<ctx::app::Nill>{ //-- we have to specify a generic type for data field in Response struct which in our case is Nill struct
                         data: Some(ctx::app::Nill(&[])), //-- data is an empty &[u8] array
-                        message: UPDATED, //-- collection found in fishuman document (database)
+                        message: UPDATED, //-- collection found in bitrader document (database)
                         status: 200,
                     };
                     Ok(
@@ -220,7 +222,7 @@ async fn cast_vote_proposal(req: HttpRequest, vote_info: web::Json<schemas::fish
 
 
 #[post("/set-expire")]
-async fn expire_proposal(req: HttpRequest, exp_info: web::Json<schemas::fishuman::ExpireProposalRequest>) -> Result<HttpResponse, Error>{
+async fn expire_event(req: HttpRequest, exp_info: web::Json<schemas::event::ExpireEventRequest>) -> Result<HttpResponse, Error>{
     
     let conn = utils::db::connection().await;
     let app_storage = match conn.as_ref().unwrap().db.as_ref().unwrap().mode{ //-- here as_ref() method convert &Option<T> to Option<&T>
@@ -229,13 +231,13 @@ async fn expire_proposal(req: HttpRequest, exp_info: web::Json<schemas::fishuman
     };
 
     let exp_info = exp_info.into_inner(); //-- into_inner() will deconstruct to an inner value and return T
-    let proposal_id = ObjectId::parse_str(exp_info._id.as_str()).unwrap(); //-- generating mongodb object id from the id string
-    let proposals = app_storage.unwrap().database("fishuman").collection::<schemas::fishuman::ProposalInfo>("proposals"); //-- selecting proposals collection to fetch all proposal infos into the ProposalInfo struct
-    match proposals.find_one_and_update(doc!{"_id": proposal_id}, doc!{"$set": {"is_expired": true}}, None).unwrap(){ //-- finding proposal based on proposal id
-        Some(proposal_doc) => { //-- deserializing BSON into the ProposalInfo struct
-            let response_body = ctx::app::Response::<schemas::fishuman::ProposalInfo>{ //-- we have to specify a generic type for data field in Response struct which in our case is ProposalInfo struct
-                data: Some(proposal_doc), //-- data is an empty &[u8] array
-                message: UPDATED, //-- collection found in fishuman document (database)
+    let event_id = ObjectId::parse_str(exp_info._id.as_str()).unwrap(); //-- generating mongodb object id from the id string
+    let events = app_storage.unwrap().database("bitrader").collection::<schemas::event::EventInfo>("events"); //-- selecting events collection to fetch all event infos into the EventInfo struct
+    match events.find_one_and_update(doc!{"_id": event_id}, doc!{"$set": {"is_expired": true}}, None).unwrap(){ //-- finding event based on event id
+        Some(event_doc) => { //-- deserializing BSON into the EventInfo struct
+            let response_body = ctx::app::Response::<schemas::event::EventInfo>{ //-- we have to specify a generic type for data field in Response struct which in our case is EventInfo struct
+                data: Some(event_doc), //-- data is an empty &[u8] array
+                message: UPDATED, //-- collection found in bitrader document (database)
                 status: 200,
             };
             Ok(
@@ -268,8 +270,8 @@ async fn expire_proposal(req: HttpRequest, exp_info: web::Json<schemas::fishuman
 
 
 pub fn register(config: &mut web::ServiceConfig){
-    config.service(add_proposal);
-    config.service(cast_vote_proposal);
-    config.service(expire_proposal);
-    config.service(get_all_proposals);
+    config.service(add_event);
+    config.service(cast_vote_event);
+    config.service(expire_event);
+    config.service(get_all_events);
 }

@@ -41,12 +41,9 @@ mod apis;
 
 
 
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 use dotenv::dotenv;
-use uuid::Uuid;
 use std::env;
-use log::{info, error};
-use crate::contexts as ctx;
 use actix_web::{web, App, HttpServer, middleware::Logger};
 
 
@@ -70,6 +67,10 @@ async fn main() -> std::io::Result<()>{
 
 
 
+
+
+
+
     // -------------------------------- environment variables setup
     //
     // ---------------------------------------------------------------------
@@ -79,8 +80,8 @@ async fn main() -> std::io::Result<()>{
     let io_buffer_size = env::var("IO_BUFFER_SIZE").expect("⚠️ no io buffer size variable set").parse::<u32>().unwrap() as usize; //-- usize is the minimum size in os which is 32 bits
     let environment = env::var("ENVIRONMENT").expect("⚠️ no environment variable set");
     let host = env::var("HOST").expect("⚠️ no host variable set");
-    let fishuman_port = env::var("AYOUB_FISHUMAN_PORT").expect("⚠️ no port variable set for fishuman service");
-    let fishuman_server_addr = format!("{}:{}", host, fishuman_port).as_str().parse::<SocketAddr>().unwrap(); //-- converting the host and port String into the as_str() then parse it based on SocketAddr generic type
+    let port = env::var("BITRADER_AUTH_PORT").expect("⚠️ no port variable set for bitrader service");
+    let server_addr = format!("{}:{}", host, port).as_str().parse::<SocketAddr>().unwrap(); //-- converting the host and port String into the as_str() then parse it based on SocketAddr generic type
 
 
 
@@ -88,9 +89,6 @@ async fn main() -> std::io::Result<()>{
     
 
     
-
-
-
 
 
 
@@ -102,18 +100,14 @@ async fn main() -> std::io::Result<()>{
     HttpServer::new(move || {
         App::new()
             .service(
-                web::scope("/proposal")
-                            .configure(apis::fishuman::register)
+                web::scope("/auth")
+                            .configure(apis::event::register)
             )
             .wrap(Logger::default())
     })
-    .bind(fishuman_server_addr).unwrap()
+    .bind(server_addr).unwrap()
     .run()
     .await
-
-
-
-
 
 
 
