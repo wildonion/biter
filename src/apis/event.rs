@@ -1,7 +1,4 @@
 
-
-
-
 use std::env;
 use crate::contexts as ctx;
 use crate::schemas;
@@ -48,10 +45,10 @@ async fn add_event(req: HttpRequest, event_info: web::Json<schemas::event::Event
                 ).into_body()
             )
         }, 
-        None => { //-- means we didn't find any document related to this title and we have to create a new proposaL
+        None => { //-- means we didn't find any document related to this title and we have to create a new event
             let events = app_storage.unwrap().database("bitrader").collection::<schemas::event::EventAddRequest>("events");
             let now = Utc::now().timestamp_nanos() / 1_000_000_000; // nano to sec
-            let exp_time = now + env::var("PROPOSAL_EXPIRATION").expect("⚠️ found no event expiration time").parse::<i64>().unwrap();
+            let exp_time = now + env::var("EVENT_EXPIRATION").expect("⚠️ found no event expiration time").parse::<i64>().unwrap();
             let new_event = schemas::event::EventAddRequest{
                 title: event_info.clone().title,
                 content: event_info.clone().content,
@@ -204,7 +201,7 @@ async fn cast_vote_event(req: HttpRequest, vote_info: web::Json<schemas::event::
                 },
             }
         }, 
-        None => { //-- means we didn't find any document related to this title and we have to tell the user to create a new proposaL
+        None => { //-- means we didn't find any document related to this title and we have to tell the user to create a new event
             let response_body = ctx::app::Response::<ctx::app::Nill>{ //-- we have to specify a generic type for data field in Response struct which in our case is Nill struct
                 data: Some(ctx::app::Nill(&[])), //-- data is an empty &[u8] array
                 message: NOT_FOUND_DOCUMENT,
@@ -246,7 +243,7 @@ async fn expire_event(req: HttpRequest, exp_info: web::Json<schemas::event::Expi
                 ).into_body()
             )
         }, 
-        None => { //-- means we didn't find any document related to this title and we have to tell the user to create a new proposaL
+        None => { //-- means we didn't find any document related to this title and we have to tell the user to create a new event
             let response_body = ctx::app::Response::<ctx::app::Nill>{ //-- we have to specify a generic type for data field in Response struct which in our case is Nill struct
                 data: Some(ctx::app::Nill(&[])), //-- data is an empty &[u8] array
                 message: NOT_FOUND_DOCUMENT,
@@ -272,21 +269,21 @@ async fn delete_event(req: HttpRequest, param: web::Path<(String, String)>) -> R
     //     ctx::app::Mode::Off => None, //-- no db is available cause it's off
     // };
 
-    let delete_api_key = env::var("PROPOSAL_DELETE_KEY").expect("⚠️ no api key variable set");
+    let delete_api_key = env::var("event_DELETE_KEY").expect("⚠️ no api key variable set");
     let db_host = env::var("DB_HOST").expect("⚠️ no db host variable set");
     let db_port = env::var("DB_PORT").expect("⚠️ no db port variable set");
     let db_engine = env::var("DB_ENGINE").expect("⚠️ no db engine variable set");
     let db_addr = format!("{}://{}:{}", db_engine, db_host, db_port);
     let app_storage = Client::with_uri_str(db_addr).unwrap();
 
-    let param = param.into_inner(); //-- into_inner() will convert the id and api_key into its actual type which is of type String - param.1 is the api key and param.0 is the id of the proposal
+    let param = param.into_inner(); //-- into_inner() will convert the id and api_key into its actual type which is of type String - param.1 is the api key and param.0 is the id of the event
     if param.1 == delete_api_key{
-        let proposal_id = ObjectId::parse_str(param.0.as_str()).unwrap(); //-- generating mongodb object id from the id string
-        let proposals = app_storage.database("fishuman").collection::<schemas::fishuman::EventInfo>("events"); //-- selecting events collection to fetch all event infos into the EventInfo struct
-        match proposals.find_one_and_delete(doc!{"_id": proposal_id}, None).unwrap(){ //-- finding event based on event id
-            Some(proposal_doc) => { //-- deserializing BSON into the ProposalInfo struct
+        let event_id = ObjectId::parse_str(param.0.as_str()).unwrap(); //-- generating mongodb object id from the id string
+        let events = app_storage.database("fishuman").collection::<schemas::fishuman::EventInfo>("events"); //-- selecting events collection to fetch all event infos into the EventInfo struct
+        match events.find_one_and_delete(doc!{"_id": event_id}, None).unwrap(){ //-- finding event based on event id
+            Some(event_doc) => { //-- deserializing BSON into the eventInfo struct
                 let response_body = ctx::app::Response::<schemas::fishuman::EventInfo>{ //-- we have to specify a generic type for data field in Response struct which in our case is EventInfo struct
-                    data: Some(proposal_doc), //-- data is an empty &[u8] array
+                    data: Some(event_doc), //-- data is an empty &[u8] array
                     message: DELETED, //-- collection found in fishuman document (database)
                     status: 200,
                 };
@@ -296,7 +293,7 @@ async fn delete_event(req: HttpRequest, param: web::Path<(String, String)>) -> R
                     ).into_body() //-- call this method in order not to get failed to fetch in client side
                 )
             }, 
-            None => { //-- means we didn't find any document related to this title and we have to tell the user to create a new proposaL
+            None => { //-- means we didn't find any document related to this title and we have to tell the user to create a new event
                 let response_body = ctx::app::Response::<ctx::app::Nill>{ //-- we have to specify a generic type for data field in Response struct which in our case is Nill struct
                     data: Some(ctx::app::Nill(&[])), //-- data is an empty &[u8] array
                     message: NOT_FOUND_DOCUMENT,
