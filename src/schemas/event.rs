@@ -48,6 +48,7 @@ pub struct EventInfo{
     pub _id: Option<ObjectId>,
     pub title: String,
     pub content: String,
+    pub creator_wallet_address: String,
     pub upvotes: Option<u16>,
     pub downvotes: Option<u16>,
     pub voters: Option<Vec<Voter>>,
