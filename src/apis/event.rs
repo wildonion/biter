@@ -263,6 +263,68 @@ async fn expire_event(req: HttpRequest, exp_info: web::Json<schemas::event::Expi
 }
 
 
+#[post("/delete/{id}/{api_key}")]
+async fn delete_event(req: HttpRequest, param: web::Path<(String, String)>) -> Result<HttpResponse, Error>{
+    
+    // let storage = req.app_data::<web::Data<Option<Arc<ctx::app::Storage>>>>().unwrap(); //-- unwrapping the db inside the web data structure which is passed inside the app_data() method
+    // let app_storage = match storage.as_ref().as_ref().unwrap().db.as_ref().unwrap().mode{ //-- here as_ref() method convert &Option<T> to Option<&T>
+    //     ctx::app::Mode::On => storage.as_ref().as_ref().unwrap().db.as_ref().unwrap().instance.as_ref(), //-- return the db if it wasn't detached - instance.as_ref() will return the Option<&Client>
+    //     ctx::app::Mode::Off => None, //-- no db is available cause it's off
+    // };
+
+    let delete_api_key = env::var("PROPOSAL_DELETE_KEY").expect("⚠️ no api key variable set");
+    let db_host = env::var("DB_HOST").expect("⚠️ no db host variable set");
+    let db_port = env::var("DB_PORT").expect("⚠️ no db port variable set");
+    let db_engine = env::var("DB_ENGINE").expect("⚠️ no db engine variable set");
+    let db_addr = format!("{}://{}:{}", db_engine, db_host, db_port);
+    let app_storage = Client::with_uri_str(db_addr).unwrap();
+
+    let param = param.into_inner(); //-- into_inner() will convert the id and api_key into its actual type which is of type String - param.1 is the api key and param.0 is the id of the proposal
+    if param.1 == delete_api_key{
+        let proposal_id = ObjectId::parse_str(param.0.as_str()).unwrap(); //-- generating mongodb object id from the id string
+        let proposals = app_storage.database("fishuman").collection::<schemas::fishuman::EventInfo>("events"); //-- selecting events collection to fetch all event infos into the EventInfo struct
+        match proposals.find_one_and_delete(doc!{"_id": proposal_id}, None).unwrap(){ //-- finding event based on event id
+            Some(proposal_doc) => { //-- deserializing BSON into the ProposalInfo struct
+                let response_body = ctx::app::Response::<schemas::fishuman::EventInfo>{ //-- we have to specify a generic type for data field in Response struct which in our case is EventInfo struct
+                    data: Some(proposal_doc), //-- data is an empty &[u8] array
+                    message: DELETED, //-- collection found in fishuman document (database)
+                    status: 200,
+                };
+                Ok(
+                    HttpResponse::Ok().json(
+                        response_body
+                    ).into_body() //-- call this method in order not to get failed to fetch in client side
+                )
+            }, 
+            None => { //-- means we didn't find any document related to this title and we have to tell the user to create a new proposaL
+                let response_body = ctx::app::Response::<ctx::app::Nill>{ //-- we have to specify a generic type for data field in Response struct which in our case is Nill struct
+                    data: Some(ctx::app::Nill(&[])), //-- data is an empty &[u8] array
+                    message: NOT_FOUND_DOCUMENT,
+                    status: 404,
+                };
+                Ok(
+                    HttpResponse::NotFound().json(
+                        response_body
+                    ).into_body() //-- call this method in order not to get failed to fetch in client side
+                )
+            },
+        }
+    } else{
+        let response_body = ctx::app::Response::<ctx::app::Nill>{ //-- we have to specify a generic type for data field in Response struct which in our case is Nill struct
+            data: Some(ctx::app::Nill(&[])), //-- data is an empty &[u8] array
+            message: WRONG_API_KEY,
+            status: 403,
+        };
+        Ok(
+            HttpResponse::Forbidden().json(
+                response_body
+            ).into_body() //-- call this method in order not to get failed to fetch in client side
+        )
+    }
+
+}
+
+
 
 
 
@@ -274,4 +336,5 @@ pub fn register(config: &mut web::ServiceConfig){
     config.service(cast_vote_event);
     config.service(expire_event);
     config.service(get_all_events);
+    config.service(delete_event);
 }
